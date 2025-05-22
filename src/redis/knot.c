@@ -26,6 +26,7 @@
 #include "libknot/descriptor.c"
 #include "contrib/mempattern.c"
 #include "contrib/string.c"
+#include "contrib/strtonum.h"
 #include "contrib/ucw/mempool.c"
 #include "libzscanner/functions.c"
 #include "libzscanner/scanner.c.t0"
@@ -923,6 +924,7 @@ static int knot_rrset_aof_rewrite(RedisModuleCtx *ctx, RedisModuleString **argv,
 	return REDISMODULE_OK;
 }
 
+/*
 static int get_serial(uint32_t *serial, RedisModuleCtx *ctx, RedisModuleKey *zone_index_key) {
 	*serial = 0;
 	if (zone_index_key == NULL) {
@@ -1302,6 +1304,62 @@ static int knot_diff_change_ttl(RedisModuleCtx *ctx, RedisModuleString **argv, i
 
 	return REDISMODULE_OK;
 }
+*/
+
+static const char *str_arg(RedisModuleCtx *ctx, RedisModuleString **argv, int idx)
+{
+	size_t len;
+	const char *data = RedisModule_StringPtrLen(argv[idx], &len);
+	char *res = RedisModule_PoolAlloc(ctx, len + 1);
+	memcpy(res, data, len);
+	res[len] = '\0';
+	return res;
+}
+
+// <zone_name> [<instance_id=0>]
+static int knot_zone_begin(RedisModuleCtx *ctx, RedisModuleString **argv, int argc)
+{
+	uint8_t zid;
+	knot_dname_storage_t zone;
+
+	const char *arg;
+	switch (argc) {
+	case 3:
+		arg = str_arg(ctx, argv, 2);
+		if (str_to_u8(arg, &zid) != KNOT_EOK) {
+			return RedisModule_ReplyWithError(ctx, "invalid zone index");
+		}
+		// FALLTHROUGH
+	case 2:
+		arg = str_arg(ctx, argv, 1);
+		if (knot_dname_from_str(zone, arg, sizeof(zone)) == NULL) {
+			return RedisModule_ReplyWithError(ctx, "invalid zone name");
+		}
+		break;
+	default:
+		return RedisModule_WrongArity(ctx);
+	}
+
+	return REDISMODULE_OK;
+}
+
+static int knot_zone_store(RedisModuleCtx *ctx, RedisModuleString **argv, int argc)
+{
+
+	return REDISMODULE_OK;
+}
+
+static int knot_zone_commit(RedisModuleCtx *ctx, RedisModuleString **argv, int argc)
+{
+
+	return REDISMODULE_OK;
+}
+
+static int knot_zone_abort(RedisModuleCtx *ctx, RedisModuleString **argv, int argc)
+{
+
+	return REDISMODULE_OK;
+}
 
 __attribute__((visibility("default")))
 int RedisModule_OnLoad(RedisModuleCtx *ctx)
@@ -1355,10 +1413,16 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx)
 		RedisModule_CreateCommand(ctx, "knot.record.add",        knot_record_add,        "write",    1, 1, 1) == REDISMODULE_ERR ||
 		RedisModule_CreateCommand(ctx, "knot.rrset.remove",      knot_rrset_remove,      "write",    1, 1, 1) == REDISMODULE_ERR ||
 		RedisModule_CreateCommand(ctx, "knot.rrset.aof_rewrite", knot_rrset_aof_rewrite, "write",    1, 1, 1) == REDISMODULE_ERR ||
+		/*
 		RedisModule_CreateCommand(ctx, "knot.diff.load",         knot_diff_since,        "readonly", 1, 1, 1) == REDISMODULE_ERR ||
 		RedisModule_CreateCommand(ctx, "knot.diff.add",          knot_diff_add,          "write",    1, 1, 1) == REDISMODULE_ERR ||
 		RedisModule_CreateCommand(ctx, "knot.diff.remove",       knot_diff_remove,       "write",    1, 1, 1) == REDISMODULE_ERR ||
-		RedisModule_CreateCommand(ctx, "knot.diff.change_ttl",   knot_diff_change_ttl,   "write",    1, 1, 1) == REDISMODULE_ERR
+		RedisModule_CreateCommand(ctx, "knot.diff.change_ttl",   knot_diff_change_ttl,   "write",    1, 1, 1) == REDISMODULE_ERR ||
+		*/
+		RedisModule_CreateCommand(ctx, "knot.zone.begin",    knot_zone_begin,   "write",    1, 1, 1) == REDISMODULE_ERR ||
+		RedisModule_CreateCommand(ctx, "knot.zone.store",    knot_zone_store,   "write",    1, 1, 1) == REDISMODULE_ERR ||
+		RedisModule_CreateCommand(ctx, "knot.zone.commit",   knot_zone_commit,  "write",    1, 1, 1) == REDISMODULE_ERR ||
+		RedisModule_CreateCommand(ctx, "knot.zone.abort",    knot_zone_abort,   "write",    1, 1, 1) == REDISMODULE_ERR
 	) {
 		RedisModule_Log(ctx, REDISMODULE_LOGLEVEL_WARNING, "ERR 'knot' module already loaded");
 		RedisModule_ReplyWithError(ctx, "ERR 'knot' module already loaded");
