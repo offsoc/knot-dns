@@ -54,10 +54,10 @@
 typedef enum {
 	EVENTS,
 	ZONE_INDEX,
-	RRSET,
+	//RRSET,
 	DIFF_META,
 	DIFF_INDEX,
-	DIFF
+	//DIFF
 } knot_type_id;
 
 typedef struct {
@@ -569,7 +569,7 @@ static RedisModuleString *construct_rrset_key(RedisModuleCtx *ctx, const uint8_t
 {
 	uint8_t key_data[KNOT_RRSET_KEY_MAXLEN];
 	uint8_t *key_ptr = key_data;
-	key_ptr[0] = RRSET;
+	key_ptr[0] = 2;//RRSET;
 	key_ptr = memcpy(key_ptr + 1, origin, origin_len);
 	key_ptr = memcpy(key_ptr + origin_len, owner, owner_len);
 	key_ptr = memcpy(key_ptr + owner_len, &rtype, sizeof(rtype));
@@ -1306,6 +1306,34 @@ static int knot_diff_change_ttl(RedisModuleCtx *ctx, RedisModuleString **argv, i
 }
 */
 
+#define KNOT_RDB_VERSION	"\x01"
+#define KNOT_RDB_PREFIX		"k" KNOT_RDB_VERSION
+
+typedef enum {
+	EVENT = 0,
+	ZONE  = 1,
+	RRSET = 2,
+	UPD   = 3,
+	DIFF  = 4,
+} knot_rdb_type;
+
+typedef enum {
+	ZSET   = 0,
+	ACTIVE = 1,
+} zone_type;
+
+static RedisModuleKey *x(RedisModuleCtx *ctx, knot_rdb_type type,
+                         uint8_t zid,
+                         const uint8_t *zone, uint8_t zone_len, int rights)
+{
+	RedisModuleString *keyname = RedisModule_CreateStringPrintf(ctx,
+		KNOT_RDB_PREFIX "%c%c%.*s%c", type, zone_len, zone_len, zone, zid);
+	RedisModuleKey *key = RedisModule_OpenKey(ctx, keyname, rights);
+	RedisModule_FreeString(ctx, keyname);
+
+	return key;
+}
+
 static const char *str_arg(RedisModuleCtx *ctx, RedisModuleString **argv, int idx)
 {
 	size_t len;
@@ -1319,7 +1347,7 @@ static const char *str_arg(RedisModuleCtx *ctx, RedisModuleString **argv, int id
 // <zone_name> [<instance_id=0>]
 static int knot_zone_begin(RedisModuleCtx *ctx, RedisModuleString **argv, int argc)
 {
-	uint8_t zid;
+	uint8_t zid = 0;
 	knot_dname_storage_t zone;
 
 	const char *arg;
@@ -1339,6 +1367,10 @@ static int knot_zone_begin(RedisModuleCtx *ctx, RedisModuleString **argv, int ar
 	default:
 		return RedisModule_WrongArity(ctx);
 	}
+
+	size_t zone_len = knot_dname_size(zone);
+
+	//RedisModuleKey *zone_key = find_zone_index(ctx, origin_str, origin_len, REDISMODULE_READ | REDISMODULE_WRITE);
 
 	return REDISMODULE_OK;
 }
