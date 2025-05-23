@@ -26,7 +26,7 @@
 #include "libknot/descriptor.c"
 #include "contrib/mempattern.c"
 #include "contrib/string.c"
-#include "contrib/strtonum.h"
+//#include "contrib/strtonum.h"
 #include "contrib/ucw/mempool.c"
 #include "libzscanner/functions.c"
 #include "libzscanner/scanner.c.t0"
@@ -1306,61 +1306,76 @@ static int knot_diff_change_ttl(RedisModuleCtx *ctx, RedisModuleString **argv, i
 }
 */
 
-#define KNOT_RDB_VERSION	"\x01"
+#define KNOT_RDB_VERSION	"1"
 #define KNOT_RDB_PREFIX		"k" KNOT_RDB_VERSION
+#define ZID_DEFAULT		'1'
 
 typedef enum {
-	EVENT = 0,
-	ZONE  = 1,
-	RRSET = 2,
-	UPD   = 3,
-	DIFF  = 4,
+	EVENT = 'E',
+	ZONE  = 'Z',
+	RRSET = 'R',
+	UPD   = 'U',
+	DIFF  = 'D',
 } knot_rdb_type;
 
 typedef enum {
-	ZSET   = 0,
-	ACTIVE = 1,
+	DATA   = 'D',
+	ACTIVE = 'A',
 } zone_type;
 
-static RedisModuleKey *x(RedisModuleCtx *ctx, knot_rdb_type type,
+/*
+static RedisModuleKey *azid(RedisModuleCtx *ctx,
                          uint8_t zid,
-                         const uint8_t *zone, uint8_t zone_len, int rights)
+                         const uint8_t *zone, uint8_t zone_len)
 {
 	RedisModuleString *keyname = RedisModule_CreateStringPrintf(ctx,
-		KNOT_RDB_PREFIX "%c%c%.*s%c", type, zone_len, zone_len, zone, zid);
-	RedisModuleKey *key = RedisModule_OpenKey(ctx, keyname, rights);
+		KNOT_RDB_PREFIX "%c%c%.*s%c%c", ZONE, zone_len, zone_len, zone,
+		ACTIVE, zid);
+	RedisModuleKey *key = RedisModule_OpenKey(ctx, keyname, REDISMODULE_READ);
 	RedisModule_FreeString(ctx, keyname);
 
-	return key;
+	if (RedisModule_KeyType(key) == REDISMODULE_KEYTYPE_STRING) {
+		size_t len;
+		char *str = RedisModule_StringDMA(key, &len, REDISMODULE_READ);
+		if (str != NULL)
+	}
 }
-
-static const char *str_arg(RedisModuleCtx *ctx, RedisModuleString **argv, int idx)
+*/
+static char parse_zid(RedisModuleString *arg)
 {
 	size_t len;
-	const char *data = RedisModule_StringPtrLen(argv[idx], &len);
-	char *res = RedisModule_PoolAlloc(ctx, len + 1);
-	memcpy(res, data, len);
-	res[len] = '\0';
-	return res;
+	const char *data = RedisModule_StringPtrLen(arg, &len);
+	if (len != 1 || *data < '1' || *data > '9') {
+		return 0;
+	} else {
+		return *data;
+	}
+}
+
+static knot_dname_t *parse_dname(RedisModuleCtx *ctx, RedisModuleString *arg, knot_dname_storage_t *out)
+{
+	size_t len;
+	const char *data = RedisModule_StringPtrLen(arg, &len);
+	char *buf = RedisModule_PoolAlloc(ctx, len + 1);
+	memcpy(buf, data, len);
+	buf[len] = '\0';
+	return knot_dname_from_str(*out, buf, sizeof(out));
 }
 
 // <zone_name> [<instance_id=0>]
 static int knot_zone_begin(RedisModuleCtx *ctx, RedisModuleString **argv, int argc)
 {
-	uint8_t zid = 0;
+	char zid = ZID_DEFAULT;
 	knot_dname_storage_t zone;
 
-	const char *arg;
 	switch (argc) {
 	case 3:
-		arg = str_arg(ctx, argv, 2);
-		if (str_to_u8(arg, &zid) != KNOT_EOK) {
+		if ((zid = parse_zid(argv[2]) == 0)) {
 			return RedisModule_ReplyWithError(ctx, "invalid zone index");
 		}
 		// FALLTHROUGH
 	case 2:
-		arg = str_arg(ctx, argv, 1);
-		if (knot_dname_from_str(zone, arg, sizeof(zone)) == NULL) {
+		if (parse_dname(ctx, argv[1], &zone) == NULL) {
 			return RedisModule_ReplyWithError(ctx, "invalid zone name");
 		}
 		break;
@@ -1369,6 +1384,7 @@ static int knot_zone_begin(RedisModuleCtx *ctx, RedisModuleString **argv, int ar
 	}
 
 	size_t zone_len = knot_dname_size(zone);
+	assert(zone_len > 0);
 
 	//RedisModuleKey *zone_key = find_zone_index(ctx, origin_str, origin_len, REDISMODULE_READ | REDISMODULE_WRITE);
 
