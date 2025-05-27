@@ -267,6 +267,7 @@ static int event_loop(server_t *server, const char *socket, bool daemonize,
 		.server = server,
 		.thr_count = CTL_MAX_CONCURRENT / sock_count
 	};
+	server->ctl_ctxs = &sctx;
 
 	int ret = ctl_socket_thr_init(&sctx, sock_count);
 	if (ret != KNOT_EOK) {

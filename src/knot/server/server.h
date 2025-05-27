@@ -6,10 +6,11 @@
 #pragma once
 
 #include "contrib/atomic.h"
-#include "knot/conf/conf.h"
 #include "knot/catalog/catalog_update.h"
 #include "knot/common/evsched.h"
 #include "knot/common/fdset.h"
+#include "knot/conf/conf.h"
+#include "knot/ctl/threads.h"
 #include "knot/journal/knot_lmdb.h"
 #include "knot/server/dthreads.h"
 #include "knot/worker/pool.h"
@@ -115,6 +116,9 @@ typedef struct server {
 	size_t n_ifaces;
 	bool quic_active;
 	bool tls_active;
+
+	/*! \brief Control socket thread contexts. */
+	ctl_socket_ctx_t *ctl_ctxs;
 
 	/*! \brief Mutex protecting simultaneous access from concurrent CTL threads. */
 	pthread_rwlock_t ctl_lock;
